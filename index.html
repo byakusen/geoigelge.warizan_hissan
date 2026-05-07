@@ -1,0 +1,1290 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>わり算の筆算の考え方</title>
+<link href="https://fonts.googleapis.com/css2?family=M+PLUS+Rounded+1c:wght@400;700&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.5.1/dist/confetti.browser.min.js"></script>
+<style>
+    :root {
+        --primary-color: #fff500;
+        --hint-color: #4caf50;
+        --wrong-color: #ff5252;
+        --cell-size: 50px;
+    }
+
+    body {
+        min-height: 100vh;
+        margin: 0;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        background: linear-gradient(135deg, #e0c3fc 0%, #8ec5fc 100%);
+        font-family: 'M PLUS Rounded 1c', sans-serif;
+        touch-action: manipulation; /* ダブルタップズーム防止 */
+        overflow: hidden; /* スマホでの不意なスクロールを防止 */
+    }
+
+    #app-container {
+        background: rgba(255, 255, 255, 0.8);
+        backdrop-filter: blur(12px);
+        -webkit-backdrop-filter: blur(12px);
+        border-radius: 20px;
+        box-shadow: 0 8px 32px rgba(0,0,0,0.15);
+        padding: 20px;
+        width: 95%;
+        max-width: 800px; /* 3列収まるように少し広くしました */
+        display: flex;
+        flex-direction: column;
+        gap: 20px;
+    }
+
+    .settings {
+        display: flex;
+        justify-content: center;
+        gap: 15px;
+        background: #fff;
+        padding: 10px 20px;
+        border-radius: 12px;
+        box-shadow: inset 0 2px 5px rgba(0,0,0,0.05);
+        margin-bottom: 5px;
+    }
+    
+    .settings label {
+        font-size: 1.1rem;
+        font-weight: bold;
+        color: #333;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        gap: 5px;
+    }
+
+    /* 追加機能のスタイル */
+    .tutorial-wrap {
+        display: flex;
+        justify-content: center;
+        margin-top: -15px;
+        margin-bottom: 5px;
+    }
+    .tutorial-wrap label {
+        font-size: 1rem;
+        font-weight: bold;
+        color: #555;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        gap: 5px;
+        background: #fff;
+        padding: 5px 20px;
+        border-radius: 12px;
+        box-shadow: inset 0 2px 5px rgba(0,0,0,0.05);
+    }
+    .guide-arrow {
+        position: absolute;
+        top: -35px;
+        left: 50%;
+        transform: translateX(-50%);
+        font-size: 2rem;
+        color: #ff9800;
+        pointer-events: none;
+        animation: bounceDown 1s infinite;
+        z-index: 50;
+        text-shadow: 0 2px 4px rgba(0,0,0,0.2);
+    }
+    @keyframes bounceDown {
+        0%, 100% { transform: translate(-50%, 0); }
+        50% { transform: translate(-50%, 10px); }
+    }
+    #combo-count {
+        display: inline-block;
+        transition: transform 0.2s;
+    }
+
+    .header {
+        text-align: center;
+        font-size: 1.4rem;
+        font-weight: bold;
+        color: #333;
+        min-height: 3rem;
+        background: #e1f5fe;
+        border-radius: 12px;
+        padding: 10px 20px;
+        box-shadow: inset 0 2px 5px rgba(0,0,0,0.05);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        transition: opacity 0.3s;
+    }
+
+    .main-content {
+        display: flex;
+        flex-direction: row;
+        gap: 30px;
+        justify-content: center;
+        align-items: flex-start;
+    }
+
+    @media (max-width: 600px) {
+        .main-content {
+            flex-direction: column;
+            align-items: center;
+            gap: 15px;
+        }
+        .header {
+            font-size: 1.1rem;
+            min-height: 2.5rem;
+        }
+    }
+
+    /* マス目エリア */
+    .grid-wrapper {
+        background-color: white;
+        border: 2px solid #00bcd4;
+        border-radius: 8px;
+        padding: 0;
+        position: relative;
+        display: inline-block;
+        box-shadow: inset 0 0 10px rgba(0,188,212,0.2);
+        align-self: flex-start; /* 親の伸縮の影響を受けない */
+    }
+
+    .grid {
+        display: grid;
+        grid-template-columns: repeat(4, var(--cell-size));
+        grid-template-rows: repeat(8, var(--cell-size));
+        gap: 0;
+        /* 背景格子線をgrid自体に描く（セル境界と一致させる） */
+        background-color: white;
+        background-image: 
+            linear-gradient(to right, #b2ebf2 2px, transparent 2px),
+            linear-gradient(to bottom, #b2ebf2 2px, transparent 2px);
+        background-size: var(--cell-size) var(--cell-size);
+        background-position: 0 0;
+        border-radius: 6px;
+    }
+
+    .cell {
+        width: var(--cell-size);
+        height: var(--cell-size);
+        box-sizing: border-box;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        font-size: 2.2rem;
+        font-weight: bold;
+        line-height: 1;
+        color: #333;
+        position: relative;
+        user-select: none;
+        transition: background-color 0.2s, transform 0.2s;
+    }
+
+    /* 記号の微調整 */
+    /* 「）」をマスとマスの境界線上に重ねて配置する。
+       cell-r1-c1 は被除数の十の位を表示するセルで、
+       その左端（c0との境界）に「）」を疑似要素で重ねる。 */
+    #cell-r1-c1 {
+        position: relative;
+        overflow: visible;
+    }
+    #cell-r1-c1::before {
+        content: ")";
+        position: absolute;
+        left: 0;
+        top: 46%;
+        transform: translate(-50%, -50%) scale(1, 1.25);
+        font-size: 2.2rem;
+        font-weight: bold;
+        line-height: 1;
+        color: #333;
+        pointer-events: none;
+    }
+
+    /* 筆算の線 */
+    .border-bottom { border-bottom: 3px solid #333; }
+    .border-hidden { border-color: transparent; }
+
+    /* 商の下線を少し下げるための調整 */
+    #cell-r0-c1.border-bottom, #cell-r0-c2.border-bottom, #cell-r0-c3.border-bottom {
+        border-bottom: none;
+    }
+    #cell-r0-c1::after, #cell-r0-c2::after, #cell-r0-c3::after {
+        content: '';
+        position: absolute;
+        bottom: -8%;
+        left: 0;
+        width: 100%;
+        height: 3px;
+        background-color: #333;
+        display: none;
+        z-index: 10;
+    }
+    #cell-r0-c1.border-bottom::after, #cell-r0-c2.border-bottom::after, #cell-r0-c3.border-bottom::after {
+        display: block;
+    }
+
+    /* UI要素 */
+    .controls {
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+        min-width: 140px;
+    }
+
+    button {
+        font-family: inherit;
+        font-size: 1.2rem;
+        padding: 12px 15px;
+        border: none;
+        border-radius: 10px;
+        background: linear-gradient(145deg, #f0f0f0, #cacaca);
+        box-shadow: 3px 3px 6px rgba(0,0,0,0.1), inset 1px 1px 2px rgba(255,255,255,0.8);
+        cursor: pointer;
+        font-weight: bold;
+        color: #333;
+        transition: transform 0.1s, box-shadow 0.1s, filter 0.2s;
+    }
+
+    button:active {
+        transform: translateY(2px);
+        box-shadow: 1px 1px 2px rgba(0,0,0,0.1);
+    }
+
+    button.action-btn {
+        background: var(--primary-color);
+        border: 2px solid #e6c200;
+        box-shadow: 0 4px 0 #c4a600;
+    }
+    button.action-btn:active {
+        box-shadow: 0 0 0 #c4a600;
+        transform: translateY(4px);
+    }
+
+    button.hint-btn {
+        background: var(--hint-color);
+        color: white;
+        border: 2px solid #388e3c;
+        box-shadow: 0 4px 0 #2e7d32;
+    }
+    button.hint-btn:active {
+        box-shadow: 0 0 0 #2e7d32;
+        transform: translateY(4px);
+    }
+
+    button.reset-btn {
+        background: var(--wrong-color);
+        color: white;
+        border: 2px solid #d50000;
+        box-shadow: 0 4px 0 #b71c1c;
+        margin-top: auto;
+    }
+    button.reset-btn:active {
+        box-shadow: 0 0 0 #b71c1c;
+        transform: translateY(4px);
+    }
+
+    /* テンキー */
+    .numpad {
+        /* display: none; を削除し、常にスペースを確保してガタつきを防止します */
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 5px;
+        margin-top: 0;
+        background: #f5f5f5;
+        padding: 10px;
+        border-radius: 10px;
+        box-shadow: inset 0 2px 4px rgba(0,0,0,0.1);
+        visibility: hidden;
+        opacity: 0;
+        transition: opacity 0.2s;
+        align-content: start;
+        min-width: 160px;
+    }
+    .numpad.visible { 
+        visibility: visible;
+        opacity: 1;
+    }
+    .num-btn {
+        padding: 10px 0;
+        font-size: 1.4rem;
+        background: white;
+        box-shadow: 0 2px 0 #ccc;
+    }
+    .num-btn:active {
+        box-shadow: 0 0 0 #ccc;
+        transform: translateY(2px);
+    }
+
+    @media (max-width: 600px) {
+        .controls {
+            flex-direction: row;
+            flex-wrap: wrap;
+            justify-content: center;
+        }
+        button { font-size: 1rem; padding: 10px; }
+        button.reset-btn { margin-top: 10px; width: 100%; }
+        
+        /* スマホ画面では横幅が足りないため、従来通り非表示時に詰める挙動にします */
+        .numpad {
+            display: none;
+        }
+        .numpad.visible {
+            display: grid;
+        }
+    }
+
+    /* アニメーション・エフェクト */
+    .shake { animation: shake 0.4s cubic-bezier(.36,.07,.19,.97) both; }
+    @keyframes shake {
+        10%, 90% { transform: translate3d(-2px, 0, 0); }
+        20%, 80% { transform: translate3d(4px, 0, 0); }
+        30%, 50%, 70% { transform: translate3d(-6px, 0, 0); }
+        40%, 60% { transform: translate3d(6px, 0, 0); }
+    }
+
+    .hint-glow { animation: glow 1s infinite alternate; }
+    @keyframes glow {
+        from { box-shadow: 0 0 5px #ffeb3b, inset 0 0 5px #ffeb3b; background-color: rgba(255,235,59,0.4); }
+        to { box-shadow: 0 0 15px #ff9800, inset 0 0 15px #ff9800; background-color: rgba(255,152,0,0.7); }
+    }
+
+    .selected {
+        background-color: rgba(33, 150, 243, 0.3);
+        border-radius: 50%;
+    }
+    .selected-group-left {
+        background-color: rgba(33, 150, 243, 0.3);
+        border-radius: 25px 0 0 25px;
+    }
+    .selected-group-right {
+        background-color: rgba(33, 150, 243, 0.3);
+        border-radius: 0 25px 25px 0;
+    }
+
+    .red-text { color: red; }
+    
+    .box-input {
+        border: 3px dashed #ff9800;
+        width: 80%;
+        height: 80%;
+        border-radius: 8px;
+        background: rgba(255, 152, 0, 0.1);
+        box-sizing: border-box;
+    }
+
+    /* ドラッグ用 */
+    .draggable-span {
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        width: 100%;
+        height: 100%;
+        cursor: grab;
+        touch-action: none;
+        background: rgba(255, 255, 255, 0.9);
+        border-radius: 8px;
+        box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+        z-index: 100;
+        color: #00bcd4;
+    }
+    .draggable-span:active { cursor: grabbing; }
+
+    /* ポップアップ */
+    #popup {
+        position: absolute;
+        top: 20%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        background: var(--wrong-color);
+        color: white;
+        padding: 10px 30px;
+        border-radius: 30px;
+        font-size: 1.2rem;
+        font-weight: bold;
+        box-shadow: 0 4px 10px rgba(0,0,0,0.2);
+        opacity: 0;
+        pointer-events: none;
+        transition: opacity 0.3s;
+        z-index: 1000;
+    }
+    #popup.show { opacity: 1; }
+
+    /* 花丸 */
+    #hanamaru {
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%) scale(0);
+        width: 200px;
+        height: 200px;
+        pointer-events: none;
+        opacity: 0;
+        transition: transform 0.6s cubic-bezier(0.175, 0.885, 0.32, 1.275), opacity 0.6s;
+        background: url('https://github.com/byakusen/hanamaru/blob/main/hanamaru2.png?raw=true') no-repeat center center;
+        background-size: contain;
+        z-index: 500;
+    }
+    #hanamaru.show {
+        transform: translate(-50%, -50%) scale(1);
+        opacity: 1;
+    }
+</style>
+</head>
+<body>
+
+<div id="app-container">
+    <div style="display: flex; justify-content: flex-start; align-items: center; margin-bottom: -10px; z-index: 10;">
+        <div style="font-weight: bold; color: #ff5722; font-size: 1.2rem; background: rgba(255,255,255,0.9); padding: 5px 15px; border-radius: 20px; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
+            🔥 連続正解: <span id="combo-count">0</span>
+        </div>
+    </div>
+
+    <div class="settings" id="mode-settings">
+        <label><input type="radio" name="calc-mode" value="2digit" checked> ２けた</label>
+        <label><input type="radio" name="calc-mode" value="3digit1"> ３けた①</label>
+        <label><input type="radio" name="calc-mode" value="3digit2"> ３けた②</label>
+        <label><input type="radio" name="calc-mode" value="random"> ランダム</label>
+    </div>
+    
+    <div class="tutorial-wrap">
+        <label><input type="checkbox" id="tutorial-mode"> チュートリアル（自動ヒント）</label>
+    </div>
+    
+    <div id="instruction" class="header">読み込み中...</div>
+    
+    <div class="main-content">
+        <div class="grid-wrapper">
+            <div class="grid">
+                <!-- Row 0 (商) -->
+                <div class="cell" id="cell-r0-c0"></div>
+                <div class="cell" id="cell-r0-c1"></div>
+                <div class="cell" id="cell-r0-c2"></div>
+                <div class="cell" id="cell-r0-c3"></div>
+                <!-- Row 1 (問題：除数）被除数) -->
+                <div class="cell" id="cell-r1-c0"></div>
+                <div class="cell" id="cell-r1-c1"></div>
+                <div class="cell" id="cell-r1-c2"></div>
+                <div class="cell" id="cell-r1-c3"></div>
+                <!-- Row 2 (積1) -->
+                <div class="cell" id="cell-r2-c0"></div>
+                <div class="cell" id="cell-r2-c1"></div>
+                <div class="cell" id="cell-r2-c2"></div>
+                <div class="cell" id="cell-r2-c3"></div>
+                <!-- Row 3 (差1とおろした数) -->
+                <div class="cell" id="cell-r3-c0"></div>
+                <div class="cell" id="cell-r3-c1"></div>
+                <div class="cell" id="cell-r3-c2"></div>
+                <div class="cell" id="cell-r3-c3"></div>
+                <!-- Row 4 (積2) -->
+                <div class="cell" id="cell-r4-c0"></div>
+                <div class="cell" id="cell-r4-c1"></div>
+                <div class="cell" id="cell-r4-c2"></div>
+                <div class="cell" id="cell-r4-c3"></div>
+                <!-- Row 5 (差2とおろした数) -->
+                <div class="cell" id="cell-r5-c0"></div>
+                <div class="cell" id="cell-r5-c1"></div>
+                <div class="cell" id="cell-r5-c2"></div>
+                <div class="cell" id="cell-r5-c3"></div>
+                <!-- Row 6 (積3) -->
+                <div class="cell" id="cell-r6-c0"></div>
+                <div class="cell" id="cell-r6-c1"></div>
+                <div class="cell" id="cell-r6-c2"></div>
+                <div class="cell" id="cell-r6-c3"></div>
+                <!-- Row 7 (あまり) -->
+                <div class="cell" id="cell-r7-c0"></div>
+                <div class="cell" id="cell-r7-c1"></div>
+                <div class="cell" id="cell-r7-c2"></div>
+                <div class="cell" id="cell-r7-c3"></div>
+            </div>
+        </div>
+
+        <div class="controls">
+            <button id="btn-tateru" class="action-btn">たてる</button>
+            <button id="btn-kakeru" class="action-btn">かける</button>
+            <button id="btn-hiku" class="action-btn">ひく</button>
+            <button id="btn-orosu" class="action-btn">おろす</button>
+            <button id="btn-hint" class="hint-btn">ヒント</button>
+            <button id="btn-reset" class="reset-btn">もう一度遊ぶ</button>
+        </div>
+        
+        <div style="position: relative;">
+            <div id="numpad" class="numpad">
+                <button class="num-btn" data-val="1">1</button>
+                <button class="num-btn" data-val="2">2</button>
+                <button class="num-btn" data-val="3">3</button>
+                <button class="num-btn" data-val="4">4</button>
+                <button class="num-btn" data-val="5">5</button>
+                <button class="num-btn" data-val="6">6</button>
+                <button class="num-btn" data-val="7">7</button>
+                <button class="num-btn" data-val="8">8</button>
+                <button class="num-btn" data-val="9">9</button>
+                <div style="visibility: hidden;"></div>
+                <button class="num-btn" data-val="0">0</button>
+                <div style="visibility: hidden;"></div>
+            </div>
+            <div id="hanamaru"></div>
+        </div>
+    </div>
+</div>
+
+<div id="popup">ちがうよ！</div>
+
+<script>
+// --- 問題生成と状態管理 ---
+let divisor, dividend, q1, q2, q3, q, sub1, sub2, sub3;
+let state = 0;
+let selectedCells = [];
+let states = [];
+let mode = '2digit';
+
+// --- 追加変数 ---
+let comboCount = 0;
+let startTime = 0;
+let errorStats = { tateru: 0, kakeru: 0, hiku: 0, orosu: 0, other: 0 };
+
+function generateStates() {
+    if (mode === '2digit') {
+        states = [
+            { id: 0, text: "はじめに何をしますか。", type: "action", expect: "tateru" },
+            { id: 1, text: "商はAにたちますか、Bにたちますか。", type: "click_cell", expect: "r0-c1" },
+            { id: 2, text: "何をたてますか。", type: "input", expect: () => q1, targetCell: "r0-c1" },
+            { id: 3, text: "次に何をしますか。", type: "action", expect: "kakeru" },
+            { id: 4, text: "何と何をかけますか。", type: "click_cells", expect: ["r1-c0", "r0-c1"] },
+            { id: 5, text: "次に何をしますか。", type: "action", expect: "hiku" },
+            { id: 6, text: "何から何をひきますか。", type: "click_cells", expect: ["r1-c1", "r2-c1"] },
+            { id: 7, text: "次に何をしますか。", type: "action", expect: "orosu" },
+            { id: 8, text: "どこに何をおろしますか。", type: "drag_drop", source: "r1-c2", target: "r3-c2" },
+            { id: 9, text: "次に何をしますか。", type: "action", expect: "tateru" },
+            { id: 10, text: "何をたてますか。", type: "input", expect: () => q2, targetCell: "r0-c2" }
+        ];
+        if (q2 === 0) {
+            states.push({ id: 11, text: "答えは出ました！", type: "finish" });
+        } else {
+            states.push(
+                { id: 11, text: "次に何をしますか。", type: "action", expect: "kakeru" },
+                { id: 12, text: "何と何をかけますか。", type: "click_cells", expect: ["r1-c0", "r0-c2"] },
+                { id: 13, text: "次に何をしますか。", type: "action", expect: "hiku" },
+                { id: 14, text: "何から何をひきますか。", type: "click_cells_group", expectGroups: [ ["r3-c1", "r3-c2"], ["r4-c1", "r4-c2"] ] },
+                { id: 15, text: "答えは出ました！", type: "finish" }
+            );
+        }
+    } else if (mode === '3digit1') {
+        states = [
+            { id: 0, text: "はじめに何をしますか。", type: "action", expect: "tateru" },
+            { id: 1, text: "商はAにたちますか、Bにたちますか、Cにたちますか。", type: "click_cell", expect: "r0-c1" },
+            { id: 2, text: "何をたてますか。", type: "input", expect: () => q1, targetCell: "r0-c1" },
+            { id: 3, text: "次に何をしますか。", type: "action", expect: "kakeru" },
+            { id: 4, text: "何と何をかけますか。", type: "click_cells", expect: ["r1-c0", "r0-c1"] },
+            { id: 5, text: "次に何をしますか。", type: "action", expect: "hiku" },
+            { id: 6, text: "何から何をひきますか。", type: "click_cells", expect: ["r1-c1", "r2-c1"] },
+            { id: 7, text: "次に何をしますか。", type: "action", expect: "orosu" },
+            { id: 8, text: "どこに何をおろしますか。", type: "drag_drop", source: "r1-c2", target: "r3-c2" },
+            { id: 9, text: "次に何をしますか。", type: "action", expect: "tateru" },
+            { id: 10, text: "何をたてますか。", type: "input", expect: () => q2, targetCell: "r0-c2" },
+            { id: 11, text: "次に何をしますか。", type: "action", expect: "kakeru" },
+            { id: 12, text: "何と何をかけますか。", type: "click_cells", expect: ["r1-c0", "r0-c2"] },
+            { id: 13, text: "次に何をしますか。", type: "action", expect: "hiku" },
+            { id: 14, text: "何から何をひきますか。", type: "click_cells_group", expectGroups: [ ["r3-c1", "r3-c2"], ["r4-c1", "r4-c2"] ] },
+            { id: 15, text: "次に何をしますか。", type: "action", expect: "orosu" },
+            { id: 16, text: "どこに何をおろしますか。", type: "drag_drop", source: "r1-c3", target: "r5-c3" },
+            { id: 17, text: "次に何をしますか。", type: "action", expect: "tateru" },
+            { id: 18, text: "何をたてますか。", type: "input", expect: () => q3, targetCell: "r0-c3" }
+        ];
+        if (q3 === 0) {
+            states.push({ id: 19, text: "答えは出ました！", type: "finish" });
+        } else {
+            states.push(
+                { id: 19, text: "次に何をしますか。", type: "action", expect: "kakeru" },
+                { id: 20, text: "何と何をかけますか。", type: "click_cells", expect: ["r1-c0", "r0-c3"] },
+                { id: 21, text: "次に何をしますか。", type: "action", expect: "hiku" },
+                { id: 22, text: "何から何をひきますか。", type: "click_cells_group", expectGroups: [ ["r5-c2", "r5-c3"], ["r6-c2", "r6-c3"] ] },
+                { id: 23, text: "答えは出ました！", type: "finish" }
+            );
+        }
+    } else if (mode === '3digit2') {
+        states = [
+            { id: 0, text: "はじめに何をしますか。", type: "action", expect: "tateru" },
+            { id: 1, text: "商はAにたちますか、Bにたちますか、Cにたちますか。", type: "click_cell", expect: "r0-c2" },
+            { id: 2, text: "何をたてますか。", type: "input", expect: () => q1, targetCell: "r0-c2" },
+            { id: 3, text: "次に何をしますか。", type: "action", expect: "kakeru" },
+            { id: 4, text: "何と何をかけますか。", type: "click_cells", expect: ["r1-c0", "r0-c2"] },
+            { id: 5, text: "次に何をしますか。", type: "action", expect: "hiku" },
+            { id: 6, text: "何から何をひきますか。", type: "click_cells_group", expectGroups: [ ["r1-c1", "r1-c2"], ["r2-c1", "r2-c2"] ] },
+            { id: 7, text: "次に何をしますか。", type: "action", expect: "orosu" },
+            { id: 8, text: "どこに何をおろしますか。", type: "drag_drop", source: "r1-c3", target: "r3-c3" },
+            { id: 9, text: "次に何をしますか。", type: "action", expect: "tateru" },
+            { id: 10, text: "何をたてますか。", type: "input", expect: () => q2, targetCell: "r0-c3" }
+        ];
+        if (q2 === 0) {
+            states.push({ id: 11, text: "答えは出ました！", type: "finish" });
+        } else {
+            states.push(
+                { id: 11, text: "次に何をしますか。", type: "action", expect: "kakeru" },
+                { id: 12, text: "何と何をかけますか。", type: "click_cells", expect: ["r1-c0", "r0-c3"] },
+                { id: 13, text: "次に何をしますか。", type: "action", expect: "hiku" },
+                { id: 14, text: "何から何をひきますか。", type: "click_cells_group", expectGroups: [ ["r3-c2", "r3-c3"], ["r4-c2", "r4-c3"] ] },
+                { id: 15, text: "答えは出ました！", type: "finish" }
+            );
+        }
+    }
+}
+
+function generateProblem() {
+    divisor = Math.floor(Math.random() * 8) + 2; // 2~9
+    
+    if (mode === '2digit') {
+        let maxQ = Math.floor(99 / divisor);
+        q = Math.floor(Math.random() * (maxQ - 10 + 1)) + 10; // 10 ~ maxQ (確実にあまらず、十の位に商が立つ)
+    } else if (mode === '3digit1') {
+        let minQ = 100;
+        let maxQ = Math.floor(999 / divisor);
+        q = Math.floor(Math.random() * (maxQ - minQ + 1)) + minQ;
+    } else if (mode === '3digit2') {
+        let minQ = Math.ceil(100 / divisor);
+        if (minQ < 10) minQ = 10;
+        let maxQ = 99;
+        q = Math.floor(Math.random() * (maxQ - minQ + 1)) + minQ;
+    }
+    
+    dividend = divisor * q;
+    
+    if (mode === '2digit') {
+        q1 = Math.floor(q / 10);
+        q2 = q % 10;
+        sub1 = q1 * divisor;
+        sub2 = q2 * divisor;
+    } else if (mode === '3digit1') {
+        q1 = Math.floor(q / 100);
+        q2 = Math.floor((q % 100) / 10);
+        q3 = q % 10;
+        sub1 = q1 * divisor;
+        sub2 = q2 * divisor;
+        sub3 = q3 * divisor;
+    } else if (mode === '3digit2') {
+        q1 = Math.floor(q / 10);
+        q2 = q % 10;
+        sub1 = q1 * divisor;
+        sub2 = q2 * divisor;
+    }
+}
+
+// --- Web Audio API ---
+let audioCtx;
+const correctAudio = new Audio('https://github.com/byakusen/gogelige.quiz/raw/refs/heads/main/quiz_seikai.mp3');
+
+function initAudio() {
+    if (!audioCtx) {
+        audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    }
+    if (audioCtx.state === 'suspended') {
+        audioCtx.resume();
+    }
+    correctAudio.load();
+}
+document.addEventListener('pointerdown', initAudio, { once: true });
+
+function playSound(type) {
+    if (type === 'correct') {
+        correctAudio.currentTime = 0;
+        correctAudio.play().catch(e => console.error("Audio play error:", e));
+        return;
+    }
+
+    if (!audioCtx) return;
+    const osc = audioCtx.createOscillator();
+    const gainNode = audioCtx.createGain();
+    osc.connect(gainNode);
+    gainNode.connect(audioCtx.destination);
+
+    const now = audioCtx.currentTime;
+    
+    if (type === 'wrong') { // ブブー
+        osc.type = 'sawtooth';
+        osc.frequency.setValueAtTime(150, now);
+        osc.frequency.setValueAtTime(130, now + 0.1);
+        gainNode.gain.setValueAtTime(0.3, now);
+        gainNode.gain.exponentialRampToValueAtTime(0.01, now + 0.3);
+        osc.start(now);
+        osc.stop(now + 0.3);
+    } else if (type === 'click') { // ピッ
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(800, now);
+        gainNode.gain.setValueAtTime(0.1, now);
+        gainNode.gain.exponentialRampToValueAtTime(0.01, now + 0.1);
+        osc.start(now);
+        osc.stop(now + 0.1);
+    }
+}
+
+// --- UI更新ロジック ---
+function updateUI() {
+    const s = states[state];
+    document.getElementById('instruction').innerText = s.text;
+    
+    // ヒントと選択状態のクリア
+    document.querySelectorAll('.hint-glow').forEach(el => el.classList.remove('hint-glow'));
+    document.querySelectorAll('.selected').forEach(el => el.classList.remove('selected'));
+    document.querySelectorAll('.selected-group-left').forEach(el => el.classList.remove('selected-group-left'));
+    document.querySelectorAll('.selected-group-right').forEach(el => el.classList.remove('selected-group-right'));
+    selectedCells = [];
+    
+    // ガイド矢印のクリア
+    document.querySelectorAll('.guide-arrow').forEach(el => el.remove());
+
+    // テンキー表示切替
+    const numpad = document.getElementById('numpad');
+    if (s.type === 'input') {
+        numpad.classList.add('visible');
+    } else {
+        numpad.classList.remove('visible');
+    }
+
+    // ステートごとの描画更新
+    if (state === 1) {
+        if (mode === '2digit') {
+            document.getElementById('cell-r0-c1').innerHTML = '<span class="red-text">A</span>';
+            document.getElementById('cell-r0-c2').innerHTML = '<span class="red-text">B</span>';
+        } else {
+            document.getElementById('cell-r0-c1').innerHTML = '<span class="red-text">A</span>';
+            document.getElementById('cell-r0-c2').innerHTML = '<span class="red-text">B</span>';
+            document.getElementById('cell-r0-c3').innerHTML = '<span class="red-text">C</span>';
+        }
+    }
+    if (state === 2) {
+        if (mode === '2digit') {
+            document.getElementById('cell-r0-c1').innerHTML = '<div class="box-input"></div>';
+            document.getElementById('cell-r0-c2').innerHTML = ''; // Bを消す
+        } else if (mode === '3digit1') {
+            document.getElementById('cell-r0-c1').innerHTML = '<div class="box-input"></div>';
+            document.getElementById('cell-r0-c2').innerHTML = ''; 
+            document.getElementById('cell-r0-c3').innerHTML = ''; 
+        } else if (mode === '3digit2') {
+            document.getElementById('cell-r0-c1').innerHTML = ''; 
+            document.getElementById('cell-r0-c2').innerHTML = '<div class="box-input"></div>';
+            document.getElementById('cell-r0-c3').innerHTML = ''; 
+        }
+    }
+    if (state === 5) { // かけ算1完了
+        if (mode === '3digit1') {
+            document.getElementById('cell-r2-c1').innerText = sub1;
+            document.getElementById('cell-r2-c1').classList.remove('border-hidden');
+        } else if (mode === '3digit2') {
+            const prod = sub1;
+            document.getElementById('cell-r2-c1').innerText = Math.floor(prod / 10) || '';
+            document.getElementById('cell-r2-c2').innerText = prod % 10;
+            document.getElementById('cell-r2-c1').classList.remove('border-hidden');
+            document.getElementById('cell-r2-c2').classList.remove('border-hidden');
+        } else {
+        // sub1 = q1 * divisor。十の位の積なので、c1を起点に右詰めで表示。
+        // 1桁(8)の場合 → c1に"8"
+        // (sub1は被除数の十の位以下なので必ず1桁になるはず)
+        if (sub1 >= 10) {
+            document.getElementById('cell-r2-c0').innerText = Math.floor(sub1 / 10);
+            document.getElementById('cell-r2-c1').innerText = sub1 % 10;
+            document.getElementById('cell-r2-c0').classList.remove('border-hidden');
+            document.getElementById('cell-r2-c1').classList.remove('border-hidden');
+        } else {
+            document.getElementById('cell-r2-c1').innerText = sub1;
+            document.getElementById('cell-r2-c1').classList.remove('border-hidden');
+        }
+        }
+    }
+    if (state === 7) { // ひき算1完了
+        if (mode === '3digit1') {
+            const minuend = Math.floor(dividend / 100);
+            const diff = minuend - sub1;
+            document.getElementById('cell-r3-c1').innerText = diff > 0 ? diff : '';
+        } else if (mode === '3digit2') {
+            const minuend = Math.floor(dividend / 10);
+            const diff = minuend - sub1;
+            document.getElementById('cell-r3-c2').innerText = diff > 0 ? diff : '';
+        } else {
+        // 被除数の十の位 - sub1（1桁前提）
+        const minuend = Math.floor(dividend / 10);
+        const diff = minuend - sub1;
+        document.getElementById('cell-r3-c1').innerText = diff > 0 ? diff : '';
+        }
+    }
+    if (state === 8) { // おろす待機
+        if (mode === '3digit1') {
+            const cell = document.getElementById('cell-r1-c2');
+            const numToDrop = Math.floor((dividend % 100) / 10);
+            cell.innerHTML = `<span class="draggable-span" id="drag-target-span">${numToDrop}</span>`;
+            initDragDrop('drag-target-span', 'cell-r3-c2');
+        } else if (mode === '3digit2') {
+            const cell = document.getElementById('cell-r1-c3');
+            const numToDrop = dividend % 10;
+            cell.innerHTML = `<span class="draggable-span" id="drag-target-span">${numToDrop}</span>`;
+            initDragDrop('drag-target-span', 'cell-r3-c3');
+        } else {
+        const cell = document.getElementById('cell-r1-c2');
+        cell.innerHTML = `<span class="draggable-span" id="drag-target-span">${dividend % 10}</span>`;
+        initDragDrop('drag-target-span', 'cell-r3-c2');
+        }
+    }
+    if (state === 9) { // おろす完了
+        if (mode === '3digit1') {
+            const numToDrop = Math.floor((dividend % 100) / 10);
+            document.getElementById('cell-r1-c2').innerText = numToDrop;
+            document.getElementById('cell-r3-c2').innerText = numToDrop;
+        } else if (mode === '3digit2') {
+            const numToDrop = dividend % 10;
+            document.getElementById('cell-r1-c3').innerText = numToDrop;
+            document.getElementById('cell-r3-c3').innerText = numToDrop;
+        } else {
+        document.getElementById('cell-r1-c2').innerText = dividend % 10;
+        document.getElementById('cell-r3-c2').innerText = dividend % 10;
+        }
+    }
+    if (state === 10) { // 2回目のたてる
+        if (mode === '3digit2') {
+            document.getElementById('cell-r0-c3').innerHTML = '<div class="box-input"></div>';
+        } else {
+        document.getElementById('cell-r0-c2').innerHTML = '<div class="box-input"></div>';
+        }
+    }
+    if (state === 13) { // かけ算2完了
+        if (mode === '3digit1') {
+            const prod = sub2;
+            document.getElementById('cell-r4-c1').innerText = Math.floor(prod / 10) || '';
+            document.getElementById('cell-r4-c2').innerText = prod % 10;
+            document.getElementById('cell-r4-c1').classList.remove('border-hidden');
+            document.getElementById('cell-r4-c2').classList.remove('border-hidden');
+        } else if (mode === '3digit2') {
+            const prod = sub2;
+            document.getElementById('cell-r4-c2').innerText = Math.floor(prod / 10) || '';
+            document.getElementById('cell-r4-c3').innerText = prod % 10;
+            document.getElementById('cell-r4-c2').classList.remove('border-hidden');
+            document.getElementById('cell-r4-c3').classList.remove('border-hidden');
+        } else {
+        const prod = q2 * divisor;
+        document.getElementById('cell-r4-c1').innerText = Math.floor(prod / 10) || '';
+        document.getElementById('cell-r4-c2').innerText = prod % 10;
+        document.getElementById('cell-r4-c1').classList.remove('border-hidden');
+        document.getElementById('cell-r4-c2').classList.remove('border-hidden');
+        }
+    }
+    if (state === 15) { // ひき算2完了 (クリア)
+        if (mode === '3digit1') {
+            const minuend1 = (parseInt(document.getElementById('cell-r3-c1').innerText) || 0) * 10 
+                           + (parseInt(document.getElementById('cell-r3-c2').innerText) || 0);
+            const diff = minuend1 - sub2;
+            document.getElementById('cell-r5-c2').innerText = diff > 0 ? diff : '';
+        } else if (mode === '3digit2') {
+            document.getElementById('cell-r5-c3').innerText = '0';
+            document.getElementById('instruction').innerText = `答え（ ${q} ）`;
+            showClearEffect();
+        } else {
+        document.getElementById('cell-r5-c2').innerText = '0';
+        document.getElementById('instruction').innerText = `答え（ ${q} ）`;
+        showClearEffect();
+        }
+    }
+    
+    // 3桁①用の追加処理
+    if (mode === '3digit1') {
+        if (state === 16) {
+            const cell = document.getElementById('cell-r1-c3');
+            const numToDrop = dividend % 10;
+            cell.innerHTML = `<span class="draggable-span" id="drag-target-span">${numToDrop}</span>`;
+            initDragDrop('drag-target-span', 'cell-r5-c3');
+        }
+        if (state === 17) {
+            const numToDrop = dividend % 10;
+            document.getElementById('cell-r1-c3').innerText = numToDrop;
+            document.getElementById('cell-r5-c3').innerText = numToDrop;
+        }
+        if (state === 18) {
+            document.getElementById('cell-r0-c3').innerHTML = '<div class="box-input"></div>';
+        }
+        if (state === 21) {
+            const prod = sub3;
+            document.getElementById('cell-r6-c2').innerText = Math.floor(prod / 10) || '';
+            document.getElementById('cell-r6-c3').innerText = prod % 10;
+            document.getElementById('cell-r6-c2').classList.remove('border-hidden');
+            document.getElementById('cell-r6-c3').classList.remove('border-hidden');
+        }
+        if (state === 23) {
+            document.getElementById('cell-r7-c3').innerText = '0';
+            document.getElementById('instruction').innerText = `答え（ ${q} ）`;
+            showClearEffect();
+        }
+    }
+
+    if (s.type === 'finish') {
+        document.getElementById('instruction').innerText = `答え（ ${q} ）`;
+        if (!document.getElementById('hanamaru').classList.contains('show')) {
+            showClearEffect();
+        }
+    }
+
+    // --- 追加: ガイド矢印とチュートリアル処理 ---
+    if (s.type === 'drag_drop') {
+        const targetCell = document.getElementById(`cell-${s.target}`);
+        if (targetCell && !targetCell.querySelector('.guide-arrow')) {
+            const arrow = document.createElement('div');
+            arrow.className = 'guide-arrow';
+            arrow.innerText = '↓';
+            targetCell.appendChild(arrow);
+        }
+    }
+
+    if (document.getElementById('tutorial-mode').checked && s.type !== 'finish') {
+        setTimeout(() => document.getElementById('btn-hint').click(), 100);
+    }
+}
+
+// --- ドラッグ＆ドロップ実装 ---
+function initDragDrop(spanId, targetId) {
+    const span = document.getElementById(spanId);
+    let isDragging = false;
+    let startX, startY;
+    
+    span.onpointerdown = (e) => {
+        if (states[state].type !== 'drag_drop') return;
+        isDragging = true;
+        span.setPointerCapture(e.pointerId);
+        startX = e.clientX;
+        startY = e.clientY;
+        span.style.position = 'relative';
+        span.classList.remove('hint-glow');
+        playSound('click');
+    };
+    
+    span.onpointermove = (e) => {
+        if (!isDragging) return;
+        const dy = e.clientY - startY;
+        span.style.transform = `translate(0px, ${dy}px)`;
+    };
+    
+    span.onpointerup = (e) => {
+        if (!isDragging) return;
+        isDragging = false;
+        span.releasePointerCapture(e.pointerId);
+        
+        const targetEl = document.getElementById(targetId);
+        const targetRect = targetEl.getBoundingClientRect();
+        const spanRect = span.getBoundingClientRect();
+        
+        // 中心点距離によるスナップ判定
+        const spanCX = spanRect.left + spanRect.width / 2;
+        const spanCY = spanRect.top + spanRect.height / 2;
+        const targetCX = targetRect.left + targetRect.width / 2;
+        const targetCY = targetRect.top + targetRect.height / 2;
+        
+        if (Math.hypot(spanCX - targetCX, spanCY - targetCY) < 50) {
+            playSound('click');
+            state++;
+            updateUI();
+        } else {
+            handleWrong(spanId);
+            span.style.transition = 'transform 0.3s';
+            span.style.transform = 'translate(0px, 0px)';
+            setTimeout(() => { span.style.transition = ''; }, 300);
+        }
+    };
+}
+
+// --- 不正解・クリア演出 ---
+function handleWrong(elementId, expectedAction) {
+    playSound('wrong');
+    const popup = document.getElementById('popup');
+    popup.classList.add('show');
+    setTimeout(() => popup.classList.remove('show'), 1000);
+    
+    // --- 追加: ヒントの光をクリア（誤タップ時に残らないように） ---
+    document.querySelectorAll('.hint-glow').forEach(el => el.classList.remove('hint-glow'));
+    
+    // --- 追加: エラー記録とコンボリセット ---
+    comboCount = 0;
+    document.getElementById('combo-count').innerText = comboCount;
+    const s = states[state];
+    if (s) {
+        // actionボタン誤押下時は、本来押すべき行為（s.expect）で分類
+        if (s.type === 'action' && s.expect && errorStats[s.expect] !== undefined) {
+            errorStats[s.expect]++;
+        }
+        // 商を立てる位置を選ぶステップ（click_cell）はたてるに分類
+        else if (s.type === 'click_cell') {
+            errorStats.tateru++;
+        }
+        // それ以外は指示文のキーワードで分類
+        else if (s.text.includes("たて")) errorStats.tateru++;
+        else if (s.text.includes("かけ")) errorStats.kakeru++;
+        else if (s.text.includes("ひき")) errorStats.hiku++;
+        else if (s.text.includes("おろ")) errorStats.orosu++;
+        else errorStats.other++;
+    }
+
+    if (elementId) {
+        const el = document.getElementById(elementId);
+        if (el) {
+            el.classList.remove('shake');
+            void el.offsetWidth; // reflow
+            el.classList.add('shake');
+        }
+    }
+}
+
+function showClearEffect() {
+    document.getElementById('hanamaru').classList.add('show');
+    playSound('correct');
+    setTimeout(() => playSound('correct'), 300);
+    
+    if (typeof confetti !== 'undefined') {
+        confetti({
+            particleCount: 150,
+            spread: 80,
+            origin: { y: 0.6 },
+            colors: ['#ffeb3b', '#ff9800', '#4caf50', '#00bcd4', '#e91e63']
+        });
+    }
+
+    // --- 追加: タイム測定、アドバイス、コンボ ---
+    const timeTaken = Math.floor((Date.now() - startTime) / 1000);
+    let advice = "";
+    let maxError = 0;
+    let worstType = "";
+    for (const [key, val] of Object.entries(errorStats)) {
+        if (val > maxError) {
+            maxError = val;
+            worstType = key;
+        }
+    }
+    
+    if (maxError > 0) {
+        if (worstType === 'tateru') advice = "「たてる」をもう少しがんばろう！";
+        else if (worstType === 'kakeru') advice = "「かける」の計算に気をつけよう！";
+        else if (worstType === 'hiku') advice = "「ひき算」をていねいにやろう！";
+        else if (worstType === 'orosu') advice = "「おろす」場所をたしかめよう！";
+        else advice = "つぎはノーミスをめざそう！";
+    } else {
+        advice = "かんぺき！すばらしい！";
+    }
+
+    comboCount++;
+    document.getElementById('combo-count').innerText = comboCount;
+    const comboSpan = document.getElementById('combo-count');
+    comboSpan.style.transform = 'scale(1.5)';
+    setTimeout(() => comboSpan.style.transform = 'scale(1)', 300);
+
+    setTimeout(() => {
+        document.getElementById('instruction').innerHTML = `答え（ ${q} ）<br><span style="font-size: 1rem; color: #d32f2f;">🕒 ${timeTaken}秒！ ${advice}</span>`;
+    }, 500);
+}
+
+// --- イベントリスナー ---
+['tateru', 'kakeru', 'hiku', 'orosu'].forEach(action => {
+    document.getElementById(`btn-${action}`).addEventListener('click', () => {
+        const s = states[state];
+        if (s.type === 'action' && s.expect === action) {
+            playSound('click');
+            state++;
+            updateUI();
+        } else {
+            handleWrong(`btn-${action}`);
+        }
+    });
+});
+
+document.querySelectorAll('.cell').forEach(cell => {
+    cell.addEventListener('click', () => {
+        const s = states[state];
+        const cellId = cell.id.replace('cell-', '');
+        
+        if (s.type === 'click_cell') {
+            if (cellId === s.expect) {
+                playSound('click');
+                state++;
+                updateUI();
+            } else {
+                handleWrong(cell.id);
+            }
+        } else if (s.type === 'click_cells') {
+            if (!s.expect.includes(cellId)) {
+                handleWrong(cell.id);
+                return;
+            }
+            if (!selectedCells.includes(cellId)) {
+                selectedCells.push(cellId);
+                cell.classList.add('selected');
+                playSound('click');
+            }
+            if (s.expect.every(id => selectedCells.includes(id))) {
+                setTimeout(() => {
+                    state++;
+                    updateUI();
+                }, 300);
+            }
+        } else if (s.type === 'click_cells_group') {
+            const allValid = s.expectGroups.flat();
+            if (!allValid.includes(cellId)) {
+                handleWrong(cell.id);
+                return;
+            }
+            
+            const targetGroup = s.expectGroups.find(group => group.includes(cellId));
+            const validCells = targetGroup.filter(id => {
+                const el = document.getElementById(`cell-${id}`);
+                const text = el.textContent || el.innerText || '';
+                return text.trim() !== '';
+            });
+
+            let isNewSelection = false;
+            
+            validCells.forEach(id => {
+                if (!selectedCells.includes(id)) {
+                    selectedCells.push(id);
+                    isNewSelection = true;
+                }
+            });
+
+            if (isNewSelection) {
+                playSound('click');
+                if (validCells.length === 2) {
+                    document.getElementById(`cell-${validCells[0]}`).classList.add('selected-group-left');
+                    document.getElementById(`cell-${validCells[1]}`).classList.add('selected-group-right');
+                } else if (validCells.length === 1) {
+                    document.getElementById(`cell-${validCells[0]}`).classList.add('selected');
+                }
+            }
+
+            const isCorrect = s.expectGroups.every(group => {
+                const groupValidCells = group.filter(id => {
+                    const el = document.getElementById(`cell-${id}`);
+                    const text = el.textContent || el.innerText || '';
+                    return text.trim() !== '';
+                });
+                if (groupValidCells.length === 0) return true;
+                return groupValidCells.every(id => selectedCells.includes(id));
+            });
+
+            if (isCorrect) {
+                setTimeout(() => {
+                    state++;
+                    updateUI();
+                }, 300);
+            }
+        }
+    });
+});
+
+document.querySelectorAll('.num-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+        const s = states[state];
+        if (s.type === 'input') {
+            const val = parseInt(btn.dataset.val, 10);
+            if (val === s.expect()) {
+                playSound('click');
+                document.getElementById(`cell-${s.targetCell}`).innerText = val;
+                state++;
+                updateUI();
+            } else {
+                handleWrong('numpad');
+            }
+        }
+    });
+});
+
+document.getElementById('btn-hint').addEventListener('click', () => {
+    const s = states[state];
+    if (s.type === 'action') {
+        document.getElementById(`btn-${s.expect}`).classList.add('hint-glow');
+    } else if (s.type === 'click_cell') {
+        document.getElementById(`cell-${s.expect}`).classList.add('hint-glow');
+    } else if (s.type === 'click_cells') {
+        s.expect.forEach(id => {
+            if (!selectedCells.includes(id)) {
+                document.getElementById(`cell-${id}`).classList.add('hint-glow');
+            }
+        });
+    } else if (s.type === 'click_cells_group') {
+        s.expectGroups.flat().forEach(id => {
+            if (!selectedCells.includes(id)) {
+                document.getElementById(`cell-${id}`).classList.add('hint-glow');
+            }
+        });
+    } else if (s.type === 'input') {
+        document.querySelector(`.num-btn[data-val="${s.expect()}"]`).classList.add('hint-glow');
+        document.getElementById(`cell-${s.targetCell}`).querySelector('.box-input').classList.add('hint-glow');
+    } else if (s.type === 'drag_drop') {
+        document.getElementById('drag-target-span').classList.add('hint-glow');
+        document.getElementById(`cell-${s.target}`).classList.add('hint-glow');
+    }
+});
+
+document.getElementById('btn-reset').addEventListener('click', initGame);
+
+document.querySelectorAll('input[name="calc-mode"]').forEach(radio => {
+    radio.addEventListener('change', initGame);
+});
+
+// --- 初期化 ---
+function initGame() {
+    let selectedMode = document.querySelector('input[name="calc-mode"]:checked').value;
+    if (selectedMode === 'random') {
+        const modes = ['2digit', '3digit1', '3digit2'];
+        mode = modes[Math.floor(Math.random() * modes.length)];
+    } else {
+        mode = selectedMode;
+    }
+    generateProblem();
+    generateStates();
+    state = 0;
+    selectedCells = [];
+    
+    // --- 追加: リセット処理 ---
+    startTime = Date.now();
+    errorStats = { tateru: 0, kakeru: 0, hiku: 0, orosu: 0, other: 0 };
+    document.querySelectorAll('.guide-arrow').forEach(el => el.remove());
+    
+    // UIリセット
+    document.querySelectorAll('.cell').forEach(cell => {
+        cell.innerText = '';
+        cell.innerHTML = '';
+        cell.className = 'cell';
+    });
+    document.getElementById('hanamaru').classList.remove('show');
+    
+    // 罫線の初期設定（商の下線：c1, c2 の下）
+    if (mode === '3digit1') {
+        [1, 2, 3].forEach(c => document.getElementById(`cell-r0-c${c}`).classList.add('border-bottom'));
+        [1, 2].forEach(c => {
+            document.getElementById(`cell-r2-c${c}`).classList.add('border-bottom', 'border-hidden');
+            document.getElementById(`cell-r4-c${c}`).classList.add('border-bottom', 'border-hidden');
+        });
+        [2, 3].forEach(c => document.getElementById(`cell-r6-c${c}`).classList.add('border-bottom', 'border-hidden'));
+    } else if (mode === '3digit2') {
+        [1, 2, 3].forEach(c => document.getElementById(`cell-r0-c${c}`).classList.add('border-bottom'));
+        [1, 2].forEach(c => document.getElementById(`cell-r2-c${c}`).classList.add('border-bottom', 'border-hidden'));
+        [2, 3].forEach(c => document.getElementById(`cell-r4-c${c}`).classList.add('border-bottom', 'border-hidden'));
+    } else {
+    [1, 2].forEach(c => document.getElementById(`cell-r0-c${c}`).classList.add('border-bottom'));
+    // 積の下線（ひき算の線）：c1, c2 の下
+    [1, 2].forEach(c => {
+        document.getElementById(`cell-r2-c${c}`).classList.add('border-bottom', 'border-hidden');
+        document.getElementById(`cell-r4-c${c}`).classList.add('border-bottom', 'border-hidden');
+    });
+    }
+
+    // 問題のセット
+    document.getElementById('cell-r1-c0').innerText = divisor;
+    if (mode !== '2digit') {
+        document.getElementById('cell-r1-c1').innerText = Math.floor(dividend / 100);
+        document.getElementById('cell-r1-c2').innerText = Math.floor((dividend % 100) / 10);
+        document.getElementById('cell-r1-c3').innerText = dividend % 10;
+    } else {
+    document.getElementById('cell-r1-c1').innerText = Math.floor(dividend / 10);
+    document.getElementById('cell-r1-c2').innerText = dividend % 10;
+    }
+    
+    updateUI();
+}
+
+// 起動
+window.onload = initGame;
+</script>
+</body>
+</html>
